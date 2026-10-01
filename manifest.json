@@ -1,0 +1,9 @@
+{
+  "id": "wait-for-sync",
+  "name": "Wait for sync",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Adds an obsidian://open-synced link that waits for a note to arrive through Sync before opening it.",
+  "author": "Sash Catanzarite",
+  "isDesktopOnly": false
+}
