@@ -1,5 +1,6 @@
-// obsidian://open-synced?vault=<vault>&file=<path> opens a note like obsidian://open, but when the note
-// isn't on this device yet it waits for Obsidian Sync to bring it instead of reporting it missing.
+// obsidian://open?vault=<vault>&file=<path> opens a note as usual, but when the note isn't on this device yet it
+// waits for Obsidian Sync to bring it instead of reporting it missing. obsidian://open-synced does the same, for
+// links made before the plugin took over open.
 const { Plugin, Notice, TFile } = require('obsidian');
 
 const TIMEOUT_MS = 3 * 60 * 1000;
@@ -9,6 +10,21 @@ module.exports = class WaitForSync extends Plugin {
     this.registerObsidianProtocolHandler('open-synced', (params) => {
       this.app.workspace.onLayoutReady(() => this.open(params));
     });
+
+    // Obsidian keeps URI handlers in a private map, and register() refuses an action that already has one, so wrap
+    // the built-in open in place. A link to a note that's already here goes straight to it. Without this plugin a
+    // device still opens plain open links, which is why links use open rather than open-synced.
+    const handlers = this.app.workspace.protocolHandler?.handlers;
+    const builtin = handlers?.get('open');
+    if (!builtin) return;
+    const wrapped = (params) => {
+      if (!params.file || this.find(params.file)) return builtin(params);
+      this.app.workspace.onLayoutReady(() => this.open(params, () => builtin(params)));
+    };
+    handlers.set('open', wrapped);
+    this.register(() => {
+      if (handlers.get('open') === wrapped) handlers.set('open', builtin);
+    });
   }
 
   find(linktext) {
@@ -17,10 +33,9 @@ module.exports = class WaitForSync extends Plugin {
     return file instanceof TFile ? file : null;
   }
 
-  open(params) {
+  open(params, go = () => this.app.workspace.openLinkText(params.file, '', params.paneType || false)) {
     const linktext = params.file;
     if (!linktext) return;
-    const go = () => this.app.workspace.openLinkText(linktext, '', params.paneType || false);
     if (this.find(linktext)) return go();
 
     const name = linktext.split('#')[0].split('/').pop();
